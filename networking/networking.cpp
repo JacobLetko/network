@@ -41,6 +41,8 @@ void ShutdownSockets()
 #endif
 }
 
+
+
 #include <stdio.h>
 
 int main()
@@ -54,35 +56,75 @@ int main()
 		return false;
 	}
 
-	sockaddr_in address;
-	address.sin_family = AF_INET;
-	address.sin_addr.s_addr = INADDR_ANY;
+	sockaddr_in addr;
+	addr.sin_family = AF_INET;
+	addr.sin_addr.s_addr = INADDR_ANY;
 	//0 is port  dont use numbers lower than 1024 an dont use numbers above 50000
 	// ports 1024 and lower are used for systems
 	// ports 50000 and above are used for dynamically assigning ports
 	// use 0 if you want the system to use a free port
-	address.sin_port = htons((unsigned short)0);
+	addr.sin_port = htons((unsigned short)0);
 	//htons is used to convert a 16 byte int value from host byte order to network byte order
 	// htons stands for host to network short (16 bit)
 	// htonl stands for host to network long (32 bit)
 
-	if (bind(handle, (const sockaddr*)&address, sizeof(sockaddr_in)) < 0)
+
+	char packet_data;
+	int packet_size;
+
+	//sending a packet
+	
+	//creats address of 207.45.186.98:30000
+	unsigned int a = 207;
+	unsigned int b = 45;
+	unsigned int c = 186;
+	unsigned int d = 98;
+	unsigned short port = 30000;
+
+	unsigned int address = (a << 24) | (b << 16) | (c << 8) | d;
+	
+	addr.sin_addr.s_addr = htonl(address);
+	
+	if (bind(handle, (const sockaddr*)&addr, sizeof(sockaddr_in)) < 0)
 	{
 		printf("failed to bind socket\n");
 		return false;
 	}
 
-	//sending a packet
-	int sent_bytes = sendto(handle, (const char*)packet_data, packet_size, 0, (sockaddr*)&address,sizeof(sockaddr_in));
+	int sent_bytes = sendto(handle, (const char*)packet_data, packet_size, 0, (sockaddr*)&addr,sizeof(sockaddr_in));
 	if (sent_bytes != packet_size)
 	{
 		printf("falid to send packet\n");
 		return false;
 	}
 
+	//will only process packets 256 and smaller
+	// if recieve a packet that is 300 the entier packet will be droped
+	//procces to recieve packets
+	while (true)
+	{
+		unsigned char packet_data[256];
+
+		unsigned int max_packet_size = sizeof(packet_data);
+
+#if PLATFORM == PLATFORM_WINDOWS
+		typedef int socklen_t;
+#endif
+		sockaddr_in from;
+		socklen_t fromLength = sizeof(from);
+
+		int bytes = recvfrom(handle, (char*)packet_data, max_packet_size, 0, (sockaddr*)&from, &fromLength);
+
+		if (bytes <= 0)
+			break;
+		unsigned int from_address = ntohl(from.sin_addr.s_addr);
+		unsigned int from_port = ntohs(from.sin_port);
+	}
+	
 	return 0;
 }
 
+// non_blocking Socket
 #if PLATFORM == PLATFORM_MAC || PLATFORM == PLATFORM_UNIX
 
 int nonBlocking = 1;
@@ -100,4 +142,11 @@ if (ioctlsocket(handle, FIONBIO, &nonBlocking) != 0)
 	return false;
 }
 
+#endif
+
+// close sockets
+#if PLATFORM == PLATFORM_MAC || PLATFORM == PLATFORM_UNIX
+close(handle);
+#elif PLATFORM == PLATFORM_WINDOWS
+closesocket(handle);
 #endif
