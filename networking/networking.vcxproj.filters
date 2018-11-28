@@ -13,10 +13,27 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="Source Files\CodeBlocksMultriplayerFPS">
+      <UniqueIdentifier>{24978626-0c5e-429d-a8a8-6d6fda96c010}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\GafferOnGames">
+      <UniqueIdentifier>{80bd5a79-3d11-42ab-afe0-7e224d5f4baa}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="networking.cpp">
-      <Filter>Source Files</Filter>
+    <ClCompile Include="GafferOnGames.cpp">
+      <Filter>Source Files\GafferOnGames</Filter>
     </ClCompile>
+    <ClCompile Include="Server.cpp">
+      <Filter>Source Files\CodeBlocksMultriplayerFPS</Filter>
+    </ClCompile>
+    <ClCompile Include="client.cpp">
+      <Filter>Source Files\CodeBlocksMultriplayerFPS</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="loki.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

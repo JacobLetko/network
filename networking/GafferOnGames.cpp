@@ -44,6 +44,16 @@ void ShutdownSockets()
 
 
 #include <stdio.h>
+/// the id is so we dont get confused with other packets and only take ours
+//[unit protocol id]
+///the order of wich we send packets
+//[unit sequence]
+///the sequence of wich packets were received and what order they were recived in
+//[unit ack]
+///incase loss of packet have redundency and the ack bitfeild is the id for the ack so we know if we got the complete packet
+//[unit ack bitfield]
+///what is in the packet
+//(packet data...)
 
 int main()
 {
@@ -73,7 +83,7 @@ int main()
 	int packet_size;
 
 	//sending a packet
-	
+
 	//creats address of 207.45.186.98:30000
 	unsigned int a = 207;
 	unsigned int b = 45;
@@ -82,16 +92,16 @@ int main()
 	unsigned short port = 30000;
 
 	unsigned int address = (a << 24) | (b << 16) | (c << 8) | d;
-	
+
 	addr.sin_addr.s_addr = htonl(address);
-	
+
 	if (bind(handle, (const sockaddr*)&addr, sizeof(sockaddr_in)) < 0)
 	{
 		printf("failed to bind socket\n");
 		return false;
 	}
 
-	int sent_bytes = sendto(handle, (const char*)packet_data, packet_size, 0, (sockaddr*)&addr,sizeof(sockaddr_in));
+	int sent_bytes = sendto(handle, (const char*)packet_data, packet_size, 0, (sockaddr*)&addr, sizeof(sockaddr_in));
 	if (sent_bytes != packet_size)
 	{
 		printf("falid to send packet\n");
@@ -120,33 +130,39 @@ int main()
 		unsigned int from_address = ntohl(from.sin_addr.s_addr);
 		unsigned int from_port = ntohs(from.sin_port);
 	}
-	
+	// non_blocking Socket
+#if PLATFORM == PLATFORM_MAC || PLATFORM == PLATFORM_UNIX
+
+	int nonBlocking = 1;
+	if (fcntl(handle, F_SETFL, O_NONBLOCK, nonBlocking) == -1)
+	{
+		printf("failed to set non-blocking\n");
+		return false;
+	}
+	//windows cant use fcntl so we have to use ioctlsocket
+#elif PLATFORM == PLATFORM_WINDOWS
+	DWORD nonBlocking = 1;
+	if (ioctlsocket(handle, FIONBIO, &nonBlocking) != 0)
+	{
+		printf("faild to set non_blocking\n");
+	}
+#endif
+
+	// close sockets
+#if PLATFORM == PLATFORM_MAC || PLATFORM == PLATFORM_UNIX
+	close(handle);
+#elif PLATFORM == PLATFORM_WINDOWS
+	closesocket(handle);
+#endif
 	return 0;
 }
 
-// non_blocking Socket
-#if PLATFORM == PLATFORM_MAC || PLATFORM == PLATFORM_UNIX
 
-int nonBlocking = 1;
-if (fcntl(handle, F_SETFL, O_NONBLOCK, nonBlocking) == -1)
+///for a 16 bit sequence
+///it checks the to numbers and theier diffrence if its less than half the maximum sequence number vaule
+///but if they are far apart then the smaller number is more recent
+inline bool SequenceGreaterThan(UINT16 s1, UINT16 s2)
 {
-	printf("failed to set non-blocking\n");
-	return false;
+	return ( (s1 > s2) && (s1 - s2 <= 32768) ) || 
+		   ( (s1 < s2) && (s2 - s1 > 32768) );
 }
-//windows cant use fcntl so we have to use ioctlsocket
-#elif PLATFORM == PLATFORM_WINDOWS
-DWORD nonBlocking = 1;
-if (ioctlsocket(handle, FIONBIO, &nonBlocking) != 0)
-{
-	printf("failed to set non-blocking\n");
-	return false;
-}
-
-#endif
-
-// close sockets
-#if PLATFORM == PLATFORM_MAC || PLATFORM == PLATFORM_UNIX
-close(handle);
-#elif PLATFORM == PLATFORM_WINDOWS
-closesocket(handle);
-#endif
