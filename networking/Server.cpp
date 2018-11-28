@@ -30,21 +30,60 @@ int main()
 	if (bind(sock, (SOCKADDR*)&local_address, sizeof(local_address)) == SOCKET_ERROR)
 	{
 		printf("bind Failed: %d", WSAGetLastError());
+		WSACleanup();
+		return;
 	}
 
-	char buffer[SOCKET_BUFFER_SIZE];
-	int flags = 0;
-	SOCKADDR_IN from;
-	int from_size = sizeof(from);
-	int bytes_recived = recvfrom(sock, buffer, SOCKET_BUFFER_SIZE, flags, (SOCKADDR*)&from, &from_size);
-	if (bytes_recived == SOCKET_ERROR)
+	INT8 buffer[SOCKET_BUFFER_SIZE];
+	INT32 player_x = 0;
+	INT32 player_y = 0;
+	bool is_running = 1;
+
+	while (is_running)
 	{
-		printf("recvfrom returned SOCKET_ERROR, WSAGetLastError() %d", WSAGetLastError());
-	}
-	else
-	{
-		buffer[bytes_recived] = 0;
-		printf("%d.%d.%d.%d:%d - %s", from.sin_addr.S_un.S_un_b.s_b1, from.sin_addr.S_un.S_un_b.s_b2, from.sin_addr.S_un.S_un_b.s_b3, from.sin_addr.S_un.S_un_b.s_b4, from.sin_port, buffer);
+		// get packet from player
+		int flags = 0;
+		SOCKADDR_IN from;
+		int from_size = sizeof(from);
+		int bytes_recived = recvfrom(sock, buffer, SOCKET_BUFFER_SIZE, flags, (SOCKADDR*)&from, &from_size);
+		if (bytes_recived == SOCKET_ERROR)
+		{
+			printf("recvfrom returned SOCKET_ERROR, WSAGetLastError() %d", WSAGetLastError());
+		}
+		
+		// process input
+		char client_input = buffer[0];
+		printf("%d.%d.%d.%d:%d - %c\n", from.sin_addr.S_un.S_un_b.s_b1, from.sin_addr.S_un.S_un_b.s_b2, from.sin_addr.S_un.S_un_b.s_b3, from.sin_addr.S_un.S_un_b.s_b4, from.sin_port, client_input);
+
+		switch (client_input)
+		{
+		case 'W':
+			++player_y;
+			break;
+		case 'A':
+			--player_x;
+			break;
+		case 's':
+				--player_y;
+				break;
+		case 'd':
+			++player_x;
+			break;
+		case 'Q':
+			is_running = 0;
+			break;
+		default:
+			printf("unhandled input %c\n", client_input);
+			break;
+
+		}
+
+		// create state pack
+		INT32 write_index = 0;
+		memcpy(&buffer[write_index], &player_y, sizeof(player_x));
+		write_index += sizeof(player_x);
+
+		// send packet to client
 	}
 
 	printf("done");
