@@ -1,9 +1,23 @@
 #include "loki.h"
+
+#include <math.h>
 #include <stdio.h>
 #include <WinSock2.h>
 #include <Windows.h> // must be included after winsock2.h
 
+const float32 TURN_SPEED = 0.01f; // how fast the player turns
+const float32 ACCELERATION = 0.0f;
+const float32 MAX_SPEED = 1.0f;
+const uint32 TICKS_PER_SECOND = 60;
+const float32 SECONDS_PER_TICK = 1.0f / float32(TICKS_PER_SECOND);
 
+static float32 time_since(LARGE_INTEGER t, LARGE_INTEGER frequency)
+{
+	LARGE_INTEGER now;
+	QueryPerformanceCounter(&now);
+
+	return float32(now.QuadPart - t.QuadPart) / float32(frequency.QuadPart);
+}
 
 int main()
 {
@@ -15,6 +29,7 @@ int main()
 		return;
 	}
 
+	// todo(jbr) make sure internal socket buffer is big enough
 	int address_family = AF_INET;
 	int type = SOCK_DGRAM;
 	int protocol = IPPROTO_UDP;
@@ -36,70 +51,103 @@ int main()
 		return;
 	}
 
-	char buffer[SOCKET_BUFFER_SIZE];
-	INT32 player_x = 0;
-	INT32 player_y = 0;
-	bool is_running = 1;
+	UINT sleep_granularity_ms = 1;
+	bool32 sleep_granularity_was_set = timeBeginPeriod(sleep_granularity_ms) == TIMERR_NOERROR;
 
+	LARGE_INTEGER clock_frequency;
+	QueryPerformanceFrequency(&clock_frequency);
+
+	int8 buffer[SOCKET_BUFFER_SIZE];
+	float32 player_x = 0.0f;
+	float32 player_y = 0.0f;
+	float32 player_facing = 0.0f;
+	float32 player_speed = 0.0f;
+
+	bool is_running = 1;
 	while (is_running)
 	{
+		LARGE_INTEGER tick_start_time;
+		QueryPerformanceCounter(&tick_start_time);
+
 		// get packet from player
 		int flags = 0;
 		SOCKADDR_IN from;
 		int from_size = sizeof(from);
 		int bytes_recived = recvfrom(sock, buffer, SOCKET_BUFFER_SIZE, flags, (SOCKADDR*)&from, &from_size);
+
 		if (bytes_recived == SOCKET_ERROR)
 		{
 			printf("recvfrom returned SOCKET_ERROR, WSAGetLastError() %d", WSAGetLastError());
+			break;
 		}
 		
 		// process input
-		char client_input = buffer[0];
+		int8 client_input = buffer[0];
 		printf("%d.%d.%d.%d:%d - %c\n", from.sin_addr.S_un.S_un_b.s_b1, from.sin_addr.S_un.S_un_b.s_b2, from.sin_addr.S_un.S_un_b.s_b3, from.sin_addr.S_un.S_un_b.s_b4, from.sin_port, client_input);
 
-		switch (client_input)
+		if (client_input & 0x1)	// forward
 		{
-		case 'w':
-			++player_y;
-			break;
-		case 'a':
-			--player_x;
-			break;
-		case 's':
-				--player_y;
-				break;
-		case 'd':
-			++player_x;
-			break;
-		case 'q':
-			is_running = 0;
-			break;
-		default:
-			printf("unhandled input %c\n", client_input);
-			break;
-
+			player_speed += ACCELERATION;
+			if (player_speed > MAX_SPEED)
+			{
+				player_speed = MAX_SPEED;
+			}
+		}
+		if (client_input & 0x2)	// back
+		{
+			player_speed -= ACCELERATION;
+			if (player_speed < 0.0f)
+			{
+				player_speed = 0.0f;
+			}
+		}
+		if (client_input & 0x4)	// left
+		{
+			player_facing -= TURN_SPEED;
+		}
+		if (client_input & 0x8)	// right
+		{
+			player_facing += TURN_SPEED;
 		}
 
-		// create state pack
-		INT32 write_index = 0;
-		memcpy(&buffer[write_index], &player_y, sizeof(player_x));
-		write_index += sizeof(player_x);
+		player_x += player_speed * sinf(player_facing);
+		player_y += player_speed * cosf(player_facing);
 
-		memcpy(&buffer[write_index], &is_running, sizeof(is_running));
+		// create state pack
+		int32 bytes_written = 0;
+		memcpy(&buffer[bytes_written], &player_x, sizeof(player_x));
+		bytes_written += sizeof(player_x);
+
+		memcpy(&buffer[bytes_written], &player_y, sizeof(player_y));
+		bytes_written += sizeof(player_y);
+
+		memcpy(&buffer[bytes_written], &player_facing, sizeof(player_facing));
+		bytes_written += sizeof(player_facing);
 
 		// send packet to client
-		int buffer_length = sizeof(player_x) + sizeof(player_y) + sizeof(is_running);
 		flags = 0;
 		SOCKADDR* to = (SOCKADDR*)&from;
 		int to_length = sizeof(from);
-		if (sendto(sock, buffer, buffer_length, flags, to, to_length) == SOCKET_ERROR)
+		if (sendto(sock, buffer, bytes_written, flags, to, to_length) == SOCKET_ERROR)
 		{
 			printf("sendto failed: &d", WSAGetLastError);
 			return;
 		}
+
+		float32 time_taken_s = time_since(tick_start_time, clock_frequency);
+
+		while (time_taken_s < SECONDS_PER_TICK)
+		{
+			if (sleep_granularity_was_set)
+			{
+				DWORD time_to_wait_ms = DWORD((SECONDS_PER_TICK - time_taken_s) * 100);
+				if (time_to_wait_ms > 0)
+				{
+					Sleep(time_to_wait_ms);
+				}
+			}
+
+			time_taken_s = time_since(tick_start_time, clock_frequency);
+		}
 	}
-
-	printf("done");
-
-	return 0;
 }
