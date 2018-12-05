@@ -1,6 +1,9 @@
 #include "loki.h"
 #include <stdio.h>
 #include <WinSock2.h>
+#include <Windows.h> // must be included after winsock2.h
+
+
 
 int main()
 {
@@ -30,11 +33,10 @@ int main()
 	if (bind(sock, (SOCKADDR*)&local_address, sizeof(local_address)) == SOCKET_ERROR)
 	{
 		printf("bind Failed: %d", WSAGetLastError());
-		WSACleanup();
 		return;
 	}
 
-	INT8 buffer[SOCKET_BUFFER_SIZE];
+	char buffer[SOCKET_BUFFER_SIZE];
 	INT32 player_x = 0;
 	INT32 player_y = 0;
 	bool is_running = 1;
@@ -57,10 +59,10 @@ int main()
 
 		switch (client_input)
 		{
-		case 'W':
+		case 'w':
 			++player_y;
 			break;
-		case 'A':
+		case 'a':
 			--player_x;
 			break;
 		case 's':
@@ -69,7 +71,7 @@ int main()
 		case 'd':
 			++player_x;
 			break;
-		case 'Q':
+		case 'q':
 			is_running = 0;
 			break;
 		default:
@@ -83,12 +85,21 @@ int main()
 		memcpy(&buffer[write_index], &player_y, sizeof(player_x));
 		write_index += sizeof(player_x);
 
+		memcpy(&buffer[write_index], &is_running, sizeof(is_running));
+
 		// send packet to client
+		int buffer_length = sizeof(player_x) + sizeof(player_y) + sizeof(is_running);
+		flags = 0;
+		SOCKADDR* to = (SOCKADDR*)&from;
+		int to_length = sizeof(from);
+		if (sendto(sock, buffer, buffer_length, flags, to, to_length) == SOCKET_ERROR)
+		{
+			printf("sendto failed: &d", WSAGetLastError);
+			return;
+		}
 	}
 
 	printf("done");
-
-	WSACleanup();
 
 	return 0;
 }
