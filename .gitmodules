@@ -1,0 +1,4 @@
+[submodule "GitStuff"]
+	path = GitStuff
+	url = https://github.com/JacobLetko/GitStuff
+	branch = master
